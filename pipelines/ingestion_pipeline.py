@@ -1,38 +1,55 @@
 import os
-from typing import List
-from dotenv import load_dotenv
-from langchain_core.documents import Document
+from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
-
+from langchain_core.documents import Document
 from core.parsers.al_islam_parser import AlIslamEpubParser
-from core.models import ParsedChunk
 
-# لود کردن کلیدهای API از فایل .env
-load_dotenv()
 
 class IngestionPipeline:
     def __init__(self, db_directory: str = "./data/chroma_db"):
         self.db_directory = db_directory
         self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
-    def run(self, epub_path: str):
-        print(f"\n🚀 Starting Ingestion Pipeline for: {epub_path}")
+    def run(self, epub_path: str, force: bool = False):
+        filename = os.path.basename(epub_path)
+        print(f"\n🚀 Processing: {filename}")
 
-        # ۱. پارس کردن فایل EPUB
-        print("1️⃣ Parsing EPUB and extracting metadata...")
+        # ۱. پارس کردن فایل EPUB (این مرحله رایگان و آفلاین است)
         parser = AlIslamEpubParser(epub_path)
         parsed_chunks = parser.parse()
-
         book_title = parser.book_title
         print(f"   📖 Target Book: {book_title}")
-        print(f"   ✅ Extracted {len(parsed_chunks)} enriched chunks.")
 
-        # ۲. تبدیل به فرمت LangChain
-        print("2️⃣ Converting to LangChain Documents...")
+        # ۲. اتصال به دیتابیس
+        vectorstore = Chroma(
+            persist_directory=self.db_directory,
+            embedding_function=self.embeddings
+        )
+
+        # ۳. هوشِ تشخیص تکرار (بررسی دیتابیس)
+        existing_docs = vectorstore.get(where={"book_title": book_title})
+        book_exists = existing_docs and len(existing_docs.get('ids', [])) > 0
+
+        # اگر کتاب هست و کاربر دستور Force نداده -> Skip
+        if book_exists and not force:
+            print(f"   ⏭️  SKIPPED: '{book_title}' is already in the database.")
+            print(f"   💡 (Use --force \"{filename}\" to overwrite)")
+            return vectorstore
+
+        # اگر کتاب هست ولی کاربر دستور Force داده -> Delete old data
+        if book_exists and force:
+            print(f"   🧹 OVERRIDE: Wiping old data for '{book_title}'...")
+            try:
+                vectorstore._collection.delete(where={"book_title": book_title})
+                print("   ✅ Old data wiped successfully.")
+            except Exception as e:
+                print(f"   ⚠️ Could not delete old data: {e}")
+
+        print(f"   ✅ Extracted {len(parsed_chunks)} enriched chunks. Starting embedding...")
+
+        # ۴. تبدیل به فرمت LangChain
         langchain_docs = []
         for chunk in parsed_chunks:
-            # مدیریت کلید پاورقی‌ها
             refs = chunk.metadata.get("footnotes", ["None"])
             refs_string = " | ".join(refs) if isinstance(refs, list) else refs
 
@@ -44,25 +61,7 @@ class IngestionPipeline:
             doc = Document(page_content=chunk.text, metadata=metadata)
             langchain_docs.append(doc)
 
-        # ۳. اتصال به دیتابیس موجود
-        print("3️⃣ Connecting to existing ChromaDB...")
-        vectorstore = Chroma(
-            persist_directory=self.db_directory,
-            embedding_function=self.embeddings
-        )
-
-        # ۴. عملیات جراحی: پاک کردن نسخه قدیمیِ فقط همین کتاب
-        print(f"🧹 Checking for old versions of '{book_title}' in DB...")
-        try:
-            # دستور حذف بر اساس متادیتا (فقط رکوردهایی که اسم کتابشون مچ میشه)
-            vectorstore._collection.delete(where={"book_title": book_title})
-            print(f"   ✅ Old data for '{book_title}' successfully wiped. (Other books are SAFE!)")
-        except Exception as e:
-            # اگر دیتابیس خالی باشه یا کتاب برای بار اول اضافه بشه
-            print("   ℹ️ No existing entries found. Proceeding as a new book.")
-
-        # ۵. تزریق داده‌های جدید
-        print(f"4️⃣ Generating Embeddings and injecting {len(langchain_docs)} chunks...")
+        # ۵. تزریق داده‌های جدید به دیتابیس (تماس با OpenAI)
         vectorstore.add_documents(documents=langchain_docs)
 
         print(f"🎉 Success! '{book_title}' is securely added to the AI brain.")
