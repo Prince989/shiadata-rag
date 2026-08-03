@@ -6,8 +6,9 @@ from core.parsers.al_islam_parser import AlIslamEpubParser
 
 
 class IngestionPipeline:
-    def __init__(self, db_directory: str = "./data/chroma_db"):
+    def __init__(self, db_directory: str = "./data/chroma_db", collection_name: str = "theology"):
         self.db_directory = db_directory
+        self.collection_name = collection_name
         self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
     def run(self, epub_path: str, force: bool = False):
@@ -23,7 +24,8 @@ class IngestionPipeline:
         # ۲. اتصال به دیتابیس
         vectorstore = Chroma(
             persist_directory=self.db_directory,
-            embedding_function=self.embeddings
+            embedding_function=self.embeddings,
+            collection_name=self.collection_name
         )
 
         # ۳. هوشِ تشخیص تکرار (بررسی دیتابیس)
