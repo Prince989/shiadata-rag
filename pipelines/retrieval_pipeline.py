@@ -105,10 +105,19 @@ User's question: {question}
         print("=" * 40)
 
         formatted_context = ""
+        source_list = []  # 🚀 [کد جدید]: لیستی برای ذخیره منابع جهت ارسال به API
+
         for i, doc in enumerate(unique_docs):
             book = doc.metadata.get('book_title', 'Unknown')
             chapter = doc.metadata.get('chapter', 'Unknown')
             footnotes = doc.metadata.get('footnotes', 'None')
+
+            # 🚀 [کد جدید]: اضافه کردن متادیتای هر چانک به لیست منابع ما
+            source_list.append({
+                "book_title": book,
+                "chapter": chapter,
+                "footnotes": footnotes
+            })
 
             chunk_text = (
                 f"\n--- [Result {i + 1} | Book: {book} | Chapter: {chapter}] ---\n"
@@ -128,4 +137,9 @@ User's question: {question}
         )
 
         answer = self.llm.invoke(final_prompt)
-        return answer.content
+
+        # 🚀 [کد جدید]: حالا هم متن جواب رو برمی‌گردونیم و هم لیست منابع رو!
+        return {
+            "answer": answer.content,
+            "sources": source_list
+        }
