@@ -3,6 +3,7 @@ from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 from core.parsers.al_islam_parser import AlIslamEpubParser
+from langchain_community.document_loaders import PyPDFLoader
 
 
 class IngestionPipeline:
@@ -11,14 +12,53 @@ class IngestionPipeline:
         self.collection_name = collection_name
         self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
-    def run(self, epub_path: str, force: bool = False):
-        filename = os.path.basename(epub_path)
+    def run(self, file_path: str, force: bool = False):
+        filename = os.path.basename(file_path)
         print(f"\n🚀 Processing: {filename}")
 
-        # ۱. پارس کردن فایل EPUB (این مرحله رایگان و آفلاین است)
-        parser = AlIslamEpubParser(epub_path)
-        parsed_chunks = parser.parse()
-        book_title = parser.book_title
+        langchain_docs = []
+        book_title = ""
+
+        # ۱. تشخیص هوشمند نوع فایل و پارس کردن
+        if file_path.lower().endswith('.epub'):
+            parser = AlIslamEpubParser(file_path)
+            parsed_chunks = parser.parse()
+            book_title = parser.book_title
+
+            # تبدیل به فرمت استاندارد LangChain
+            for chunk in parsed_chunks:
+                refs = chunk.metadata.get("footnotes", ["None"])
+                refs_string = " | ".join(refs) if isinstance(refs, list) else refs
+
+                metadata = {
+                    "book_title": chunk.metadata["book_title"],
+                    "chapter": chunk.metadata["chapter"],
+                    "footnotes": refs_string
+                }
+                doc = Document(page_content=chunk.text, metadata=metadata)
+                langchain_docs.append(doc)
+
+        elif file_path.lower().endswith('.pdf'):
+            loader = PyPDFLoader(file_path)
+            pdf_docs = loader.load()
+
+            # برای PDF، اسم کتاب رو از اسم فایل درمیاریم (بدون پسوند .pdf)
+            book_title = os.path.splitext(filename)[0]
+
+            # تبدیل به فرمت استاندارد LangChain
+            for doc in pdf_docs:
+                # PyPDFLoader صفحات رو از 0 می‌شمره، پس +1 می‌کنیم
+                page_num = doc.metadata.get("page", 0) + 1
+
+                metadata = {
+                    "book_title": book_title,
+                    "chapter": f"صفحه {page_num}",
+                    "footnotes": f"صفحه {page_num}"
+                }
+                langchain_docs.append(Document(page_content=doc.page_content, metadata=metadata))
+        else:
+            raise ValueError(f"❌ Unsupported file format for {filename}. Only .epub and .pdf are allowed.")
+
         print(f"   📖 Target Book: {book_title}")
 
         # ۲. اتصال به دیتابیس
@@ -47,23 +87,9 @@ class IngestionPipeline:
             except Exception as e:
                 print(f"   ⚠️ Could not delete old data: {e}")
 
-        print(f"   ✅ Extracted {len(parsed_chunks)} enriched chunks. Starting embedding...")
+        print(f"   ✅ Extracted {len(langchain_docs)} enriched chunks. Starting embedding...")
 
-        # ۴. تبدیل به فرمت LangChain
-        langchain_docs = []
-        for chunk in parsed_chunks:
-            refs = chunk.metadata.get("footnotes", ["None"])
-            refs_string = " | ".join(refs) if isinstance(refs, list) else refs
-
-            metadata = {
-                "book_title": chunk.metadata["book_title"],
-                "chapter": chunk.metadata["chapter"],
-                "footnotes": refs_string
-            }
-            doc = Document(page_content=chunk.text, metadata=metadata)
-            langchain_docs.append(doc)
-
-        # ۵. تزریق داده‌های جدید به دیتابیس (تماس با OpenAI)
+        # ۴. تزریق داده‌های جدید به دیتابیس (تماس با OpenAI)
         vectorstore.add_documents(documents=langchain_docs)
 
         print(f"🎉 Success! '{book_title}' is securely added to the AI brain.")

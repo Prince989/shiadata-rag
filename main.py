@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from schemas.responses import ChatResponse
-from api.routes import theology
+from api.routes import theology, rijal
 
 # راه‌اندازی اپلیکیشن FastAPI با مستندات خودکار
 app = FastAPI(
@@ -38,6 +38,8 @@ app.include_router(
     prefix="/api/v1/theology",
     tags=["Theology & Mahdawiyyat"]
 )
+
+app.include_router(rijal.router, prefix="/api/v1/rijal", tags=["Ilm al-Rijal (Hadith Validation)"])
 
 @app.post("/api/v1/chat", response_model=ChatResponse, tags=["Chat"])
 def chat_with_bot():
