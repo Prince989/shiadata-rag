@@ -105,3 +105,5 @@ class RijalService:
         except Exception as e:
             print(f"❌ LLM Error: {e}")
             raise e
+
+        #AQ.Ab8RN6LM2Qn4VEysXvlrOEQq9iPtetGVigHzdZ34mQvLnCq7RA
