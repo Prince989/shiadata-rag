@@ -13,7 +13,7 @@ def batch_ingest():
         return
 
     # تعریف فلگ‌ها (Command Line Arguments)
-    parser = argparse.ArgumentParser(description="Batch Ingest EPUB and PDF books into ChromaDB")
+    parser = argparse.ArgumentParser(description="Batch Ingest EPUB and TXT books into ChromaDB")
     parser.add_argument("--force", type=str, help="Force re-ingest a specific book filename")
     parser.add_argument("--force-all", action="store_true", help="Force wipe and re-ingest ALL books")
     parser.add_argument("--collection", type=str, default="theology",
@@ -29,11 +29,11 @@ def batch_ingest():
         print(f"💡 لطفاً پوشه '{args.collection}' را در مسیر 'data/raw_epubs/' بسازید و کتاب‌ها را آنجا قرار دهید.")
         return
 
-    # 🚀 [اصلاح بزرگ]: پیدا کردن فایل‌های EPUB و PDF به صورت همزمان
-    book_files = [f for f in os.listdir(epubs_dir) if f.lower().endswith(('.epub', '.pdf'))]
+    # 🚀 [اصلاح بزرگ]: پیدا کردن فایل‌های EPUB و TXT به صورت همزمان
+    book_files = [f for f in os.listdir(epubs_dir) if f.lower().endswith(('.epub', '.txt'))]
 
     if not book_files:
-        print(f"⚠️ No EPUB or PDF files found in '{epubs_dir}'. Please add some books and try again.")
+        print(f"⚠️ No EPUB or TXT files found in '{epubs_dir}'. Please add some books and try again.")
         return
 
     print(f"📂 Target Collection: [{args.collection.upper()}]")

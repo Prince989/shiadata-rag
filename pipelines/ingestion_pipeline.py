@@ -1,9 +1,9 @@
 import os
+import re  # 🚀 برای پارس کردن دقیق تگ‌های صفحه‌بندی
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 from core.parsers.al_islam_parser import AlIslamEpubParser
-from langchain_community.document_loaders import PyPDFLoader
 
 
 class IngestionPipeline:
@@ -38,26 +38,31 @@ class IngestionPipeline:
                 doc = Document(page_content=chunk.text, metadata=metadata)
                 langchain_docs.append(doc)
 
-        elif file_path.lower().endswith('.pdf'):
-            loader = PyPDFLoader(file_path)
-            pdf_docs = loader.load()
-
-            # برای PDF، اسم کتاب رو از اسم فایل درمیاریم (بدون پسوند .pdf)
+        elif file_path.lower().endswith('.txt'):
+            # برای فایل‌های متنی، اسم کتاب رو از اسم فایل درمیاریم
             book_title = os.path.splitext(filename)[0]
 
-            # تبدیل به فرمت استاندارد LangChain
-            for doc in pdf_docs:
-                # PyPDFLoader صفحات رو از 0 می‌شمره، پس +1 می‌کنیم
-                page_num = doc.metadata.get("page", 0) + 1
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
 
-                metadata = {
-                    "book_title": book_title,
-                    "chapter": f"صفحه {page_num}",
-                    "footnotes": f"صفحه {page_num}"
-                }
-                langchain_docs.append(Document(page_content=doc.page_content, metadata=metadata))
+            # 🚀 جادوی رگکس: جدا کردن متن بر اساس تگ‌های [جلد X - صفحه Y] که اسکرپر ساخته
+            parts = re.split(r'---\s*\[(.*?)\]\s*---', content)
+
+            # parts[0] معمولا قبل از اولین تگ هست (خالیه).
+            # parts[1] تگ صفحه است، parts[2] متن صفحه، و به همین ترتیب...
+            for i in range(1, len(parts), 2):
+                page_meta = parts[i].strip()  # مثلا: جلد 2 - صفحه 60
+                page_text = parts[i+1].strip()
+
+                if page_text:  # اگر صفحه خالی نبود
+                    metadata = {
+                        "book_title": book_title,
+                        "chapter": page_meta,
+                        "footnotes": page_meta
+                    }
+                    langchain_docs.append(Document(page_content=page_text, metadata=metadata))
         else:
-            raise ValueError(f"❌ Unsupported file format for {filename}. Only .epub and .pdf are allowed.")
+            raise ValueError(f"❌ Unsupported file format for {filename}. Only .epub and .txt are allowed.")
 
         print(f"   📖 Target Book: {book_title}")
 
