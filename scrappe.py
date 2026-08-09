@@ -271,7 +271,7 @@ if __name__ == "__main__":
 
     # moral & lifestyle
 
-    scrapeWithoutPTag("revayat-hadith", "tohaf-ol-oghol", "https://lib.eshia.ir/15139", 1, 1, 516)
+    # scrapeWithoutPTag("revayat-hadith", "tohaf-ol-oghol", "https://lib.eshia.ir/15139", 1, 1, 516)
 
     # scrape("revayat-hadith", "al-khesal", "https://lib.eshia.ir/15339", 1, 1, 340)
     # scrape("revayat-hadith", "al-khesal", "https://lib.eshia.ir/15339", 2, 1, 751)
@@ -293,12 +293,12 @@ if __name__ == "__main__":
 
     # Imam Hossein
 
-    scrapeWithoutPTag("revayat-hadith", "maghtal-ol-hossein", "https://lib.eshia.ir/16064", 1, 1, 396)
+    # scrapeWithoutPTag("revayat-hadith", "maghtal-ol-hossein", "https://lib.eshia.ir/16064", 1, 1, 396)
 
     # Debate
 
-    scrapeWithoutPTag("revayat-hadith", "al-ehtejaj", "https://lib.eshia.ir/15016", 1, 1, 421)
-    scrapeWithoutPTag("revayat-hadith", "al-ehtejaj", "https://lib.eshia.ir/15016", 2, 1, 341)
+    # scrapeWithoutPTag("revayat-hadith", "al-ehtejaj", "https://lib.eshia.ir/15016", 1, 1, 421)
+    # scrapeWithoutPTag("revayat-hadith", "al-ehtejaj", "https://lib.eshia.ir/15016", 2, 1, 341)
 
 
 
