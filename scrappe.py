@@ -1,23 +1,25 @@
-﻿import requests
+﻿import re
+
+import requests
 from bs4 import BeautifulSoup
 import time
 import os
 
 
 def scrape_moajem(vol_num, start_page, end_page):
-    print(f"🚀 Starting to scrape Mo'jam al-Rijal - Volume {vol_num}...")
+    print(f"🚀 Starting to scrape al-Estebsar - Volume {vol_num}...")
 
     # ساخت مسیر ذخیره‌سازی تو پوشه دیتابیس رجال
-    output_dir = os.path.join("data", "raw_epubs", "rijal")
+    output_dir = os.path.join("data", "raw_epubs", "revayat-hadith")
     os.makedirs(output_dir, exist_ok=True)
 
-    file_path = os.path.join(output_dir, f"moajem-{vol_num}.txt")
+    file_path = os.path.join(output_dir, f"estebsar-{vol_num}.txt")
 
     with open(file_path, "w", encoding="utf-8") as f:
         # حلقه روی صفحات کتاب
         for page in range(start_page, end_page + 1):
             # آدرس دقیق جلد و صفحه در سایت کتابخانه فقاهت
-            url = f"https://lib.eshia.ir/14036/{vol_num}/{page}"
+            url = f"https://lib.eshia.ir/11002/{vol_num}/{page}"
 
             try:
                 res = requests.get(url, timeout=10)
@@ -55,7 +57,7 @@ def scrape_moajem(vol_num, start_page, end_page):
             time.sleep(0.5)
 
     print(f"\n🎉 SUCCESS! Clean text saved to {file_path}")
-    print("💡 Now you can run: python ingest.py --collection rijal")
+    print("💡 Now you can run: python ingest.py --collection revayat-hadith")
 
 
 if __name__ == "__main__":
@@ -83,10 +85,220 @@ if __name__ == "__main__":
     # scrape_moajem(vol_num=21, start_page=1, end_page=342)
     # scrape_moajem(vol_num=22, start_page=1, end_page=430)
     # scrape_moajem(vol_num=23, start_page=1, end_page=384)
-    scrape_moajem(vol_num=24, start_page=1, end_page=353)
+    # scrape_moajem(vol_num=1, start_page=1, end_page=506)
+    # scrape_moajem(vol_num=2, start_page=1, end_page=350)
+    # scrape_moajem(vol_num=3, start_page=1, end_page=391)
+    # scrape_moajem(vol_num=4, start_page=1, end_page=357)
 
 
-    # https://lib.eshia.ir/14028/1/150
-    # https://lib.eshia.ir/10241/1/2
-    # https://lib.eshia.ir/86760/1/489
-    # https://lib.eshia.ir/14010/1/344
+    def scrape(col_name, title, link, vol_num, start_page, end_page):
+        print(f"🚀 Starting to scrape {title} - Volume {vol_num}...")
+
+        # ساخت مسیر ذخیره‌سازی تو پوشه دیتابیس رجال
+        output_dir = os.path.join("data", "raw_epubs", col_name)
+        os.makedirs(output_dir, exist_ok=True)
+
+        file_path = os.path.join(output_dir, f"{title}-{vol_num}.txt")
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            # حلقه روی صفحات کتاب
+            for page in range(start_page, end_page + 1):
+                # آدرس دقیق جلد و صفحه در سایت کتابخانه فقاهت
+                url = f"{link}/{vol_num}/{page}"
+
+                try:
+                    res = requests.get(url, timeout=10)
+                    if res.status_code == 200:
+                        soup = BeautifulSoup(res.text, 'html.parser')
+
+                        # پیدا کردن سلول اصلی محتوا
+                        content_td = soup.find('td', class_='book-page-show')
+
+                        if content_td:
+                            # 🚀 [ترفند جدید]: استخراج مستقیم تمام تگ‌های p
+                            p_tags = content_td.find_all('p')
+
+                            # اگر تگ p پیدا شد، متن‌هاشون رو استخراج می‌کنیم
+                            if p_tags:
+                                # separator=' ' باعث میشه بین کلمات به هم چسبیده (مثل داخل spanها) فاصله بیفته
+                                clean_text = '\n\n'.join([p.get_text(separator=' ', strip=True) for p in p_tags])
+
+                                # قالب‌بندی تمیز برای هوش مصنوعی
+                                f.write(f"\n\n--- [جلد {vol_num} - صفحه {page}] ---\n\n")
+                                f.write(clean_text)
+
+                                print(f"✔️ Page {page} scraped and saved.")
+                            else:
+                                print(f"⚠️ Page {page}: Paragraphs (<p>) not found in content.")
+                        else:
+                            print(f"⚠️ Page {page}: Main content cell (td) not found.")
+                    else:
+                        print(f"❌ Page {page}: Failed with status {res.status_code}")
+
+                except Exception as e:
+                    print(f"❌ Page {page} Error: {e}")
+
+                # برای جلوگیری از بلاک شدن توسط سایت، نیم ثانیه مکث می‌کنیم
+                time.sleep(0.5)
+
+        print(f"\n🎉 SUCCESS! Clean text saved to {file_path}")
+        print(f"💡 Now you can run: python ingest.py --collection {col_name}")
+
+    def scrapeWithoutPTag(col_name, title, link, vol_num, start_page, end_page):
+        print(f"🚀 Starting to scrape {title} - Volume {vol_num}...")
+
+        # ساخت مسیر ذخیره‌سازی تو پوشه دیتابیس رجال
+        output_dir = os.path.join("data", "raw_epubs", col_name)
+        os.makedirs(output_dir, exist_ok=True)
+
+        file_path = os.path.join(output_dir, f"{title}-{vol_num}.txt")
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            # حلقه روی صفحات کتاب
+            for page in range(start_page, end_page + 1):
+                # آدرس دقیق جلد و صفحه در سایت کتابخانه فقاهت
+                url = f"{link}/{vol_num}/{page}"
+
+                try:
+                    res = requests.get(url, timeout=10)
+                    if res.status_code == 200:
+                        soup = BeautifulSoup(res.text, 'html.parser')
+
+                        # پیدا کردن سلول اصلی محتوا
+                        content_td = soup.find('td', class_='book-page-show')
+
+                        if content_td:
+                            # ۱. 💥 انفجار منوی مزاحم: پیدا کردن و حذف کامل sticky-menu
+                            sticky_menu = content_td.find('div', class_='sticky-menue')
+                            if sticky_menu:
+                                sticky_menu.decompose()  # کلاً از HTML حذفش می‌کنه!
+
+                            # ۲. تبدیل <br> ها به اینتر (برای حفظ شکستگیِ خطوط)
+                            for br in content_td.find_all('br'):
+                                br.replace_with('\n')
+
+                            # ۳. [ترفند طلایی]: تزریق اینتر قبل از شماره راویان
+                            # این کار باعث میشه شماره‌هایی مثل "175 -" حتماً برن خط جدید
+                            # تا دیتابیس ChromaDB تو تفکیک راویان گیج نشه
+                            for span in content_td.find_all('span', class_='KalamateKhas'):
+                                span.insert_before('\n')
+
+                            # ۴. استخراج متن تمیز
+                            clean_text = content_td.get_text(separator=' ', strip=True)
+
+                            # ۵. از بین بردن فاصله‌های خالی اضافه و اینترهای تکراری
+                            clean_text = re.sub(r'\n\s+', '\n', clean_text)
+                            clean_text = re.sub(r'\n{3,}', '\n\n', clean_text)  # حداکثر دو اینتر پشت سر هم
+
+                            if clean_text:
+                                # قالب‌بندی تمیز برای هوش مصنوعی
+                                f.write(f"\n\n--- [جلد {vol_num} - صفحه {page}] ---\n\n")
+                                f.write(clean_text)
+                                print(f"✔️ Page {page} scraped and saved.")
+                            else:
+                                print(f"⚠️ Page {page}: Content was empty after cleaning.")
+                        else:
+                            print(f"⚠️ Page {page}: Main content cell (td) not found.")
+                    else:
+                        print(f"❌ Page {page}: Failed with status {res.status_code}")
+
+                except Exception as e:
+                    print(f"❌ Page {page} Error: {e}")
+
+                # برای جلوگیری از بلاک شدن توسط سایت، نیم ثانیه مکث می‌کنیم
+                time.sleep(0.5)
+
+        print(f"\n🎉 SUCCESS! Clean text saved to {file_path}")
+        print(f"💡 Now you can run: python ingest.py --collection {col_name}")
+
+
+    # scrape("revayat-hadith", "yahzar-al-faqih", "https://lib.eshia.ir/11021", 1, 1, 609)
+    # scrape("revayat-hadith", "yahzar-al-faqih", "https://lib.eshia.ir/11021", 2, 1, 647)
+    # scrape("revayat-hadith", "yahzar-al-faqih", "https://lib.eshia.ir/11021", 3, 1, 613)
+    # scrape("revayat-hadith", "yahzar-al-faqih", "https://lib.eshia.ir/11021", 4, 1, 590)
+    #
+    # scrape("revayat-hadith", "tahziba-al-ahkam", "https://lib.eshia.ir/10083", 1, 1, 472)
+    # scrape("revayat-hadith", "tahziba-al-ahkam", "https://lib.eshia.ir/10083", 2, 1, 385)
+    # scrape("revayat-hadith", "tahziba-al-ahkam", "https://lib.eshia.ir/10083", 3, 1, 338)
+    # scrape("revayat-hadith", "tahziba-al-ahkam", "https://lib.eshia.ir/10083", 4, 1, 339)
+    # scrape("revayat-hadith", "tahziba-al-ahkam", "https://lib.eshia.ir/10083", 5, 1, 496)
+    # scrape("revayat-hadith", "tahziba-al-ahkam", "https://lib.eshia.ir/10083", 6, 1, 406)
+    # scrape("revayat-hadith", "tahziba-al-ahkam", "https://lib.eshia.ir/10083", 7, 1, 495)
+    # scrape("revayat-hadith", "tahziba-al-ahkam", "https://lib.eshia.ir/10083", 8, 1, 327)
+    # scrape("revayat-hadith", "tahziba-al-ahkam", "https://lib.eshia.ir/10083", 9, 1, 402)
+    # scrape("revayat-hadith", "tahziba-al-ahkam", "https://lib.eshia.ir/10083", 10, 1, 320)
+    #
+    # scrape("revayat-hadith", "al-kafi", "https://lib.eshia.ir/11005", 1, 1, 567)
+    # scrape("revayat-hadith", "al-kafi", "https://lib.eshia.ir/11005", 2, 1, 692)
+    # scrape("revayat-hadith", "al-kafi", "https://lib.eshia.ir/11005", 3, 1, 585)
+    # scrape("revayat-hadith", "al-kafi", "https://lib.eshia.ir/11005", 4, 1, 608)
+    # scrape("revayat-hadith", "al-kafi", "https://lib.eshia.ir/11005", 5, 1, 594)
+    # scrape("revayat-hadith", "al-kafi", "https://lib.eshia.ir/11005", 6, 1, 576)
+    # scrape("revayat-hadith", "al-kafi", "https://lib.eshia.ir/11005", 7, 1, 479)
+    # scrape("revayat-hadith", "al-kafi", "https://lib.eshia.ir/11005", 8, 1, 442)
+
+
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 1, 1, 504)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 2, 1, 565)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 3, 1, 549)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 4, 1, 479)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 5, 1, 529)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 6, 1, 521)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 7, 1, 529)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 8, 1, 557)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 9, 1, 568)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 10, 1, 567)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 11, 1, 555)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 12, 1, 579)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 13, 1, 577)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 14, 1, 615)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 15, 1, 391)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 16, 1, 397)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 17, 1, 480)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 18, 1, 468)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 19, 1, 450)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 20, 1, 581)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 21, 1, 579)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 22, 1, 451)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 23, 1, 412)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 24, 1, 446)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 25, 1, 482)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 26, 1, 328)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 27, 1, 423)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 28, 1, 396)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 29, 1, 416)
+    # scrape("revayat-hadith", "vasael-o-shia", "https://lib.eshia.ir/11025", 30, 1, 553)
+
+    # moral & lifestyle
+
+    scrapeWithoutPTag("revayat-hadith", "tohaf-ol-oghol", "https://lib.eshia.ir/15139", 1, 1, 516)
+
+    # scrape("revayat-hadith", "al-khesal", "https://lib.eshia.ir/15339", 1, 1, 340)
+    # scrape("revayat-hadith", "al-khesal", "https://lib.eshia.ir/15339", 2, 1, 751)
+
+
+    # scrape("revayat-hadith", "makarem-ol-akhlagh", "https://lib.eshia.ir/12840", 1, 1, 521)
+    # scrape("revayat-hadith", "makarem-ol-akhlagh", "https://lib.eshia.ir/12840", 2, 1, 506)
+
+    # Stories
+
+    # scrape("revayat-hadith", "al-ershad", "https://lib.eshia.ir/27035", 1, 1, 364)
+    # scrape("revayat-hadith", "al-ershad", "https://lib.eshia.ir/27035", 2, 1, 564)
+
+    # scrape("revayat-hadith", "kamal-al-din", "https://lib.eshia.ir/27045", 1, 1, 564)
+    # scrape("revayat-hadith", "kamal-al-din", "https://lib.eshia.ir/27045", 2, 1, 687)
+
+    # scrape("revayat-hadith", "tafsir-al-qomi", "https://lib.eshia.ir/12015", 1, 1, 396)
+    # scrape("revayat-hadith", "tafsir-al-qomi", "https://lib.eshia.ir/12015", 2, 1, 457)
+
+    # Imam Hossein
+
+    scrapeWithoutPTag("revayat-hadith", "maghtal-ol-hossein", "https://lib.eshia.ir/16064", 1, 1, 396)
+
+    # Debate
+
+    scrapeWithoutPTag("revayat-hadith", "al-ehtejaj", "https://lib.eshia.ir/15016", 1, 1, 421)
+    scrapeWithoutPTag("revayat-hadith", "al-ehtejaj", "https://lib.eshia.ir/15016", 2, 1, 341)
+
+
+
