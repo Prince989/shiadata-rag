@@ -4,7 +4,9 @@ from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 from core.parsers.al_islam_parser import AlIslamEpubParser
+from dotenv import load_dotenv
 
+load_dotenv()
 
 class IngestionPipeline:
     def __init__(self, db_directory: str = "./data/chroma_db", collection_name: str = "theology"):

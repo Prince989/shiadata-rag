@@ -4,8 +4,10 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from schemas.responses import SanadValidationResponse
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
+print(f"🔑 Loaded Key: {os.getenv('GOOGLE_API_KEY')[:10]}... (truncated)")
 
 class RijalService:
     def __init__(self):
@@ -16,32 +18,37 @@ class RijalService:
             embedding_function=self.embeddings,
             collection_name="rijal"
         )
-
-        self.retriever = self.vectorstore.as_retriever(search_kwargs={"k": 5})
+        self.retriever = self.vectorstore.as_retriever(
+            search_type="mmr",
+            search_kwargs={
+                "k": 20,           # تعداد نتایج نهایی که به هوش مصنوعی داده میشه
+                "fetch_k": 50,     # اول ۵۰ تا نتیجه مرتبط پیدا میکنه، بعد متنوع‌ترین ۲۰ تا رو گلچین میکنه
+                "lambda_mult": 0.5 # ضریب تنوع (نیم یعنی بالانس کامل بین ربط داشتن و متنوع بودن)
+            }
+        )
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-3.5-flash",
             temperature=0,
             max_retries=2
         )
         self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """شما یک دستیار هوشمند و متخصص علم رجال شیعه هستید. 
-        وظیفه شما استخراج دقیق اطلاعات راویان از متون ارائه شده است.
-
-        متون یافت شده از دیتابیس:
+            ("system", """شما یک رباتِ استخراج‌گرِ داده هستید و مطلقاً حق استفاده از دانش قبلی خود را ندارید.
+        شما باید فقط و فقط بر اساس متون یافت شده زیر پاسخ دهید:
         {context}
 
-        ⚠️ قوانین تحلیل متن (بسیار مهم و حیاتی):
-        ۱. 💡 درک ساختار کتاب معجم رجال: در این کتاب، هر راوی با یک شماره شروع می‌شود (مثلاً "387- أحمد بن..."). اطلاعاتِ هر راوی، فقط و فقط از جلوی نام او شروع شده و دقیقاً قبل از شروعِ شماره‌ی بعدی به پایان می‌رسد! 
-        ۲. 🔴 ممنوعیت دزدی اطلاعات: به هیچ وجه جملاتِ قبل از نام راوی (که متعلق به راوی قبلی است) را نخوانید! مثلاً اگر قبل از نام راوی نوشته شده "طریقه ضعیف"، آن را به این راوی نسبت ندهید.
-        ۳. 💡 درک القاب: گاهی در خطِ بعد از نام راوی، القاب او می‌آید و سپس وضعیتش (مثلاً "السيد أبو العباس: ثقة"). این "ثقه" متعلق به همان نام اصلی است که جستجو کرده‌اید.
-        ۴. 🔴 ممنوعیت توهم: اگر در محدوده متنیِ اختصاصیِ همان راوی، هیچ کلمه‌ای دال بر وضعیتش (مثل ثقه، ضعیف، ممدوح) نبود، او را مطلقاً "مجهول" اعلام کنید.
-        ۵. قانون تک‌راوی: اگر در ورودی فقط یک نام بود و در متن "ثقه" خوانده شده بود، بدون اما و اگر، حکم کلی سند را "صحیح" اعلام کنید.
-
+        ⚠️ قوانین حیاتی (Strict Instructions):
+        ۱. زبان خروجی: تمام تحلیل‌ها و خروجی‌ها باید به زبان فارسی باشد.
+        ۲. ممنوعیت توهم: اگر در متون صراحتاً وضعیتی برای راوی ذکر نشده باشد، او را "مجهول" اعلام کنید.
+        ۳. جعل منبع: ذکر هر منبعی خارج از تگ‌های (--- منبع ---) خطای مرگبار است.
+        ۴. مرزبندی راویان: اطلاعاتِ هر راوی دقیقاً قبل از شروعِ شماره‌ی بعدی به پایان می‌رسد.
+        ۵. 💡 درک فرمت‌های اختصاصی (بسیار مهم): در برخی متون، وضعیت راوی مستقیماً بعد از علامت مساوی (=) نوشته شده است (مثلاً "نام راوی. = ضعيف" یا "نام راوی. = صحيح"). در این حالت، شما موظف هستید دقیقاً همان کلمه بعد از مساوی را به عنوان «وضعیت راوی» در نظر بگیرید و از تفسیرهای اضافی (مثلاً اینکه این کلمه مربوط به طریق است نه شخص) خودداری کنید.
+        ۶. 📚 تجمیع منابع (بسیار مهم): اگر اطلاعات یک راوی در چندین منبعِ مختلف از متون بالا تکرار شده است، شما موظف هستید نام و آدرس دقیقِ **تمام آن منابع** را در بخش source درج کنید (مثلاً: معجم رجال الحدیث ج ۵ ص ۱۰ و الفهرست ص ۳۰۰). به هیچ وجه به یک منبع اکتفا نکنید.
+             
         وظیفه شما:
-        ۱. نام راوی را دقیقاً همان که کاربر داده بنویسید.
-        ۲. وضعیت راوی را بر اساس کلمات متن (ثقه، ضعیف، مجهول) مشخص کنید.
-        ۳. نظر علما را دقیقاً کپی کنید (اگر نبود بنویسید یافت نشد).
-        ۴. حکم کلی سند را صادر کنید.
+        ۱. نام راوی.
+        ۲. وضعیت راوی (ثقه، ضعیف، مجهول، ممدوح، صحیح) دقیقاً بر اساس کانتکست.
+        ۳. نظر علما (کپی دقیق از کانتکست).
+        ۴. حکم کلی سند.
         """),
             ("human", "سند برای بررسی: {sanad}")
         ])
@@ -66,10 +73,64 @@ class RijalService:
             narrators = [sanad_text]
 
         print(f"   ✔️ Target Search Entities: {narrators}")
-
+# استخراج کل دیتابیس در حافظه (Brute-force Search)
+        print("   📥 Fetching entire Vector DB for exact memory match...")
+        all_db_data = self.vectorstore.get(include=["documents", "metadatas"])
+        
         for narrator in narrators:
-            # جستجوی نام کامل هر راوی (مثلاً «ادريس بن عبدالله بن سعد الأشعري») به صورت واحد
-            all_docs.extend(self.retriever.invoke(narrator))
+            # حذف فاصله‌های اضافی
+            narrator_clean = narrator.strip()
+            
+            # ساخت نسخه‌های مختلف اسم برای خنثی کردن باگِ ی/ي و أ/ا
+            n_fa = narrator_clean.replace("ي", "ی").replace("ك", "ک").replace("أ", "ا")
+            n_ar = narrator_clean.replace("ی", "ي").replace("ک", "ك").replace("ا", "أ")
+            
+            print(f"   🔍 Memory Hunting for: '{narrator_clean}'")
+            
+            exact_matches = []
+            from langchain_core.documents import Document
+            
+            # جستجوی خط به خط در کل دیتابیس (Ctrl+F واقعی)
+            for text, meta in zip(all_db_data["documents"], all_db_data["metadatas"]):
+                if narrator_clean in text or n_fa in text or n_ar in text:
+                    exact_matches.append(Document(page_content=text, metadata=meta))
+            
+            if exact_matches:
+                print(f"      ✅ BINGO! Found {len(exact_matches)} absolute exact matches in memory!")
+                
+                # 🚀 الگوریتم امتیازدهی برای پیدا کردن متن‌های اصلی رجالی
+                import re
+                def score_doc(doc):
+                    text = doc.page_content
+                    score = 0
+                    
+                    # ۱. امتیاز طلایی (+100): اگر اسم راوی اول خط باشه، یا بعد از خط تیره و عدد باشه (یعنی تیتر اصلیه)
+                    if re.search(r'(^|\n|\-)\s*' + re.escape(narrator_clean), text):
+                        score += 100
+                    if re.search(r'(^|\n|\-)\s*' + re.escape(n_ar), text):
+                        score += 100
+                        
+                    # ۲. امتیاز نقره‌ای (+50): اگر تو همون چانک، کلمات کلیدیِ ارزیابی باشه
+                    if any(word in text for word in ["=", "ضعيف", "ثقة", "ثقه", "صحيح", "مجهول"]):
+                        score += 50
+                        
+                    # ۳. جریمه (-): متن‌های خیلی طولانی معمولاً پاراگراف‌های بی‌ربط هستن، پس امتیازشون کم میشه
+                    score -= len(text) / 1000 
+                    
+                    return score
+                
+                # 🛠 مرتب‌سازی ۱۰۴ نتیجه بر اساس بالاترین امتیاز رجالی
+                exact_matches.sort(key=score_doc, reverse=True)
+                
+                # حالا ۵ تای اول، قطعاً همون لیست‌های اسکرپ‌شده و تیترهای اصلیِ معجم هستن
+                all_docs.extend(exact_matches[:5])
+                
+                # چاپ لاگ برای اطمینان از اینکه متنِ درست انتخاب شده
+                print(f"      🏆 Top Match Preview: {exact_matches[0].page_content[:60].strip()}...")
+
+            else:
+                print(f"      ⚠️ No exact match anywhere. Falling back to Vector Search...")
+                all_docs.extend(self.retriever.invoke(narrator_clean))
 
         # حذف صفحات تکراری و ساخت کانتکست تمیز
         unique_pages = set()
@@ -90,7 +151,7 @@ class RijalService:
         print("\n" + "=" * 50)
         print("📥 CONTEXT SENT TO LLM:")
         print("=" * 50)
-        print(context_text[:10000] + "...\n[Truncated for display]")
+        print(context_text)
         print("=" * 50 + "\n")
 
         # ==========================================
