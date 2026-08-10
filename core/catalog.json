@@ -1,0 +1,42 @@
+{
+  "default_metadata": {
+    "domain": "general",
+    "has_sanad": true,
+    "language": "ar"
+  },
+  "books": {
+    "moajem": { "domain": "rijal", "has_sanad": false },
+    "al-fehrest": { "domain": "rijal", "has_sanad": false },
+    "al-najashi": { "domain": "rijal", "has_sanad": false },
+
+    "al-kafi": {
+      "has_sanad": true,
+      "language": "ar",
+      "volumes": {
+        "1": {"domain": "theology_akhlaq"},
+        "2": {"domain": "theology_akhlaq"},
+        "8": {"domain": "history_akhlaq"},
+        "default": {"domain": "fiqh"}
+      }
+    },
+    "vasael-o-shia": { "domain": "fiqh" },
+    "tahziba-al-ahkam": { "domain": "fiqh" },
+    "estebsar": { "domain": "fiqh" },
+    "yahzar-al-faqih": { "domain": "fiqh" },
+
+    "al-ershad": { "domain": "history" },
+    "maghtal-ol-hossein": { "domain": "history" },
+
+    "kamal-al-din": { "domain": "theology_mahdawiyyat" },
+    "al-ehtejaj": { "domain": "theology_debates", "has_sanad": false },
+
+    "tafsir-al-qomi": { "domain": "exegesis" },
+
+    "tohaf-ol-oghol": { "domain": "lifestyle_akhlaq" },
+    "al-khesal": { "domain": "lifestyle_akhlaq" },
+    "makarem-ol-akhlagh": { "domain": "lifestyle_akhlaq" },
+
+    "nahjul balagha": { "domain": "lifestyle_politics", "has_sanad": false, "language": "en" },
+    "as-sahifa al-kamilah": { "domain": "lifestyle_supplication", "has_sanad": false, "language": "en" }
+  }
+}
