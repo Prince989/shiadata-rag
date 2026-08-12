@@ -2,15 +2,20 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from services.ijtihad_service import IjtihadService
+from services.conflict_resolver_service import ConflictResolverService
 
 router = APIRouter()
 
 # نمونه‌سازی از ارکستراتور (هنگام بالا آمدن سرور اینیشیالایز می‌شود)
 ijtihad_service = IjtihadService()
+conflict_service = ConflictResolverService()
 
 # --- Schemas ---
 class IjtihadRequest(BaseModel):
     text: str = Field(..., description="متن کامل عربی حدیث به همراه سند")
+class ConflictRequest(BaseModel):
+    hadith1: str = Field(..., description="متن کامل عربی حدیث به همراه سند")
+    hadith2: str = Field(..., description="متن کامل عربی حدیث به همراه سند")
 
 @router.post("/grand-ijtihad", summary="اعتبارسنجی جامع فقهی و رجالی (Ijtihad Engine)")
 async def grand_ijtihad_endpoint(request: IjtihadRequest):
@@ -20,6 +25,17 @@ async def grand_ijtihad_endpoint(request: IjtihadRequest):
     """
     try:
         result = ijtihad_service.process_ijtihad(request.text)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@router.post("/conflict-resolution", summary="حل تعارض بین دو حدیث (Conflict Resolver Engine)")
+async def conflict_endpoint(request: ConflictRequest):
+    """
+    
+    """
+    try:
+        result = conflict_service.resolve_conflict(request.hadith1, request.hadith2)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
