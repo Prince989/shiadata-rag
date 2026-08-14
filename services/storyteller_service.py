@@ -3,13 +3,16 @@ import base64
 from langchain_chroma import Chroma
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import OpenAIEmbeddings 
-from openai import OpenAI # 👈 تغییر حیاتی اینجاست
+from openai import OpenAI
+
+from services.llm_gateway import LLMGateway # 👈 تغییر حیاتی اینجاست
 
 class StorytellerService:
     def __init__(self, db_directory: str = "./data/chroma_db"):
         self.llm_writer = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0.7)
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) # حالا این کلاینت واقعی DALL-E است
         self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        self.gateway = LLMGateway()
         self.vectorstore = Chroma(
             persist_directory=db_directory,
             embedding_function=self.embeddings,
@@ -40,7 +43,15 @@ class StorytellerService:
         
         وظیفه: فقط یک پاراگراف جذاب، دراماتیک و تصویرساز به زبان فارسی بنویسید که داستان را جلو ببرد."""
         
-        writer_response = self.llm_writer.invoke(writer_prompt)
+        # writer_response = self.llm_writer.invoke(writer_prompt)
+        try:
+            writer_response = self.gateway.invoke_structured(
+                prompt=writer_prompt
+            )
+            writer_response = writer_response.model_dump()
+        except Exception as e:
+            print(f"❌ Conflict Resolver Gateway Error: {e}")
+            raise e
         
         if isinstance(writer_response.content, list):
             narrative_text = "".join([str(item.get("text", "")) for item in writer_response.content if item.get("type") == "text"])
@@ -52,7 +63,15 @@ class StorytellerService:
         Focus on lighting, characters (without showing faces of holy figures), environment, and mood.
         Scene: {narrative_text}"""
         
-        director_response = self.llm_writer.invoke(director_prompt)
+        # director_response = self.llm_writer.invoke(director_prompt)
+        try:
+            director_response = self.gateway.invoke_structured(
+                prompt=director_prompt
+            )
+            director_response = director_response.model_dump()
+        except Exception as e:
+            print(f"❌ Conflict Resolver Gateway Error: {e}")
+            raise e
         
         if isinstance(director_response.content, list):
             image_prompt_str = "".join([str(item.get("text", "")) for item in director_response.content if item.get("type") == "text"])

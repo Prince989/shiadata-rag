@@ -7,7 +7,7 @@ router = APIRouter(prefix="/api/v1/story", tags=["Interactive Storyteller"])
 story_service = StorytellerService()
 
 @router.post("/generate-step", response_model=StoryStepResponse)
-async def generate_story_step(request: StoryStepRequest):
+def generate_story_step(request: StoryStepRequest):
     try:
         result = story_service.generate_next_step(
             topic=request.topic,
