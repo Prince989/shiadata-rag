@@ -16,7 +16,7 @@ def batch_ingest():
     parser = argparse.ArgumentParser(description="Batch Ingest EPUB and TXT books into ChromaDB")
     parser.add_argument("--force", type=str, help="Force re-ingest a specific book filename")
     parser.add_argument("--force-all", action="store_true", help="Force wipe and re-ingest ALL books")
-    parser.add_argument("--collection", type=str, default="theology",
+    parser.add_argument("--collection", type=str, default="hadith",
                         help="Target collection name (e.g., 'theology', 'rijal', 'hadith')")
 
     args = parser.parse_args()

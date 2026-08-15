@@ -9,7 +9,6 @@ import re
 
 load_dotenv()
 
-
 class RijalService:
     def __init__(self):
         self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
@@ -40,7 +39,7 @@ class RijalService:
         ۵. درک فرمت‌های اختصاصی: در برخی متون، وضعیت راوی مستقیماً بعد از علامت مساوی (=) نوشته شده است.
         ۶. 💡 تفکیک ضعف راوی از ضعف طریق (بسیار مهم): اگر در کانتکست بعد از علامت مساوی نوشته شده بود «= ضعيف بـ...» (مثلاً: = ضعيف بأبي المفضل وابن بطة، یا ضعيف بأحمد بن محمد)، این یعنی «طریقِ شیخ به کتابِ آن راوی ضعیف است»، نه اینکه خودِ شخصِ راوی ضعیف باشد! در این حالت حق ندارید راوی را "ضعیف" معرفی کنید. وضعیت او را "مجهول (با طریق ضعیف)" درج کنید و در بخش نظرات علما صراحتاً بنویسید که ضعف فقط مربوط به طریق است نه شخص.
         ۷. تجمیع منابع: اگر اطلاعات یک راوی در چندین منبع تکرار شده، نام و آدرس دقیق تمام آن منابع را در بخش source درج کنید.
-
+             
         وظیفه شما:
         ۱. نام راوی.
         ۲. وضعیت راوی (ثقه، ضعیف، مجهول، مجهول (با طریق ضعیف)، صحیح).
@@ -57,25 +56,25 @@ class RijalService:
         all_docs = []
         print("   📥 Fetching entire Vector DB for exact memory match...")
         all_db_data = self.vectorstore.get(include=["documents", "metadatas"])
-
+        
         for narrator in narrators:
             narrator_clean = narrator.strip()
-
+            
             n_fa = narrator_clean.replace("ي", "ی").replace("ك", "ک").replace("أ", "ا")
             n_ar = narrator_clean.replace("ی", "ي").replace("ک", "ك").replace("ا", "أ")
-
+            
             print(f"   🔍 Memory Hunting for: '{narrator_clean}'")
-
+            
             exact_matches = []
             from langchain_core.documents import Document
-
+            
             for text, meta in zip(all_db_data["documents"], all_db_data["metadatas"]):
                 if narrator_clean in text or n_fa in text or n_ar in text:
                     exact_matches.append(Document(page_content=text, metadata=meta))
-
+            
             if exact_matches:
                 print(f"      ✅ BINGO! Found {len(exact_matches)} exact matches.")
-
+                
                 def score_doc(doc):
                     text = doc.page_content
                     score = 0
@@ -85,9 +84,9 @@ class RijalService:
                         score += 100
                     if any(word in text for word in ["=", "ضعيف", "ثقة", "ثقه", "صحيح", "مجهول"]):
                         score += 50
-                    score -= len(text) / 1000
+                    score -= len(text) / 1000 
                     return score
-
+                
                 exact_matches.sort(key=score_doc, reverse=True)
                 all_docs.extend(exact_matches[:5])
             else:

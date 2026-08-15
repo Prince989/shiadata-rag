@@ -41,3 +41,9 @@ class AutoTaggingResponse(BaseModel):
     seo_tags: List[str] = Field(description="آرایه‌ای از ۳ کلمه کلیدی مهم برای سئو")
     mentioned_people: List[str] = Field(description="نام افراد تاریخی ذکر شده در متن")
     domain: str = Field(description="دسته بندی اصلی متن (تاریخ، اخلاق، فقه، عقاید)")
+
+class StoryStepResponse(BaseModel):
+    narrative_text: str = Field(description="پاراگراف جدید داستان")
+    image_prompt: str = Field(description="پرامپت انگلیسی تولید شده")
+    image_url: Optional[str] = Field(default=None, description="لینک تصویر تولید شده") # 👈 Optional شد
+    sources: List[str] = Field(description="منابع تاریخی")

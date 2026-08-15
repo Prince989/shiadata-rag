@@ -26,6 +26,9 @@
 
     "al-ershad": { "domain": "history" },
     "maghtal-ol-hossein": { "domain": "history" },
+    "tarikh-al-yaghobi": { "domain": "history" },
+    "tarikh-al-amali": { "domain": "history" },
+    "waqat-siffin": { "domain": "history" },
 
     "kamal-al-din": { "domain": "theology_mahdawiyyat" },
     "al-ehtejaj": { "domain": "theology_debates", "has_sanad": false },

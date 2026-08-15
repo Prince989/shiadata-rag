@@ -290,6 +290,12 @@ if __name__ == "__main__":
 
     # scrape("revayat-hadith", "tafsir-al-qomi", "https://lib.eshia.ir/12015", 1, 1, 396)
     # scrape("revayat-hadith", "tafsir-al-qomi", "https://lib.eshia.ir/12015", 2, 1, 457)
+    scrape("revayat-hadith", "tarikh-al-yaghobi", "https://lib.eshia.ir/10382", 1, 1, 272)
+    scrape("revayat-hadith", "tarikh-al-yaghobi", "https://lib.eshia.ir/10382", 2, 1, 512)
+
+    scrape("revayat-hadith", "tarikh-al-amali", "https://lib.eshia.ir/15035", 1, 1, 419)
+
+    scrape("revayat-hadith", "waqat-siffin", "https://lib.eshia.ir/22035", 1, 1, 692)
 
     # Imam Hossein
 
