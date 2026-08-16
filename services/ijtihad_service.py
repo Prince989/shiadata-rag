@@ -1,35 +1,45 @@
-import json
+import logging
 import re
-from pydantic import BaseModel, Field
 from typing import List
-from langchain_google_genai import ChatGoogleGenerativeAI
+
+from pydantic import BaseModel, Field
 
 # ایمپورت سرویس‌های پایه
 from services.hadith_service import HadithService
 from services.rijal_service import RijalService
 from services.quran_service import QuranService
 from services.shawahid_service import ShawahidService
+from services.llm_gateway import LLMGateway
 
-# --- Pydantic Schemas برای خروجی API ---
-class NarratorAnalysis(BaseModel):
-    name: str = Field(description="نام راوی")
-    status: str = Field(description="وضعیت رجالی (مثلاً: صحیح، موثق، ضعیف، مجهول)")
+# Schemas live in schemas/responses.py so a single class serves as both the
+# LLM structured-output schema and the FastAPI response_model.
+from schemas.responses import NarratorAnalysis, IjtihadVerdictResponse
 
-class FinalIjtihadVerdict(BaseModel):
-    narrators_status: List[NarratorAnalysis] = Field(description="تحلیل تک‌تک راویان")
-    sanad_status: str = Field(description="خلاصه وضعیت کل سند")
-    quran_alignment: str = Field(description="وضعیت هم‌سویی با قرآن (با ذکر آیه)")
-    shawahid_status: str = Field(description="وضعیت شواهد و متابعات")
-    final_verdict: str = Field(description="حکم نهایی فقهی")
-    detailed_reasoning: str = Field(description="استدلال جامع اصولی فقیهانه")
+logger = logging.getLogger(__name__)
+
+# Backwards-compatible alias for the manual scripts under scripts/manual/.
+FinalIjtihadVerdict = IjtihadVerdictResponse
+
 
 class IjtihadService:
-    def __init__(self):
-        self.hadith_engine = HadithService()
-        self.rijal_engine = RijalService()
-        self.quran_engine = QuranService()
-        self.shawahid_engine = ShawahidService()
-        self.llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
+    def __init__(self, container=None):
+        # Reuse the container's already-built engines rather than constructing
+        # a second HadithService and a third RijalService, each with their own
+        # Chroma handle and embeddings client.
+        if container is not None:
+            self.hadith_engine = container.hadith or HadithService(container=container)
+            self.rijal_engine = container.rijal or RijalService(container=container)
+        else:
+            self.hadith_engine = HadithService()
+            self.rijal_engine = RijalService()
+
+        self.quran_engine = QuranService(container=container)
+        self.shawahid_engine = ShawahidService(container=container)
+
+        # Routed through the gateway so these calls participate in key rotation
+        # and retries. This used to instantiate ChatGoogleGenerativeAI directly,
+        # bypassing the pool on the single most expensive call in the service.
+        self.gateway = LLMGateway()
 
     def _get_rijal_context(self, narrators: list[str]) -> str:
         all_db_data = self.rijal_engine.vectorstore.get(include=["documents", "metadatas"])
@@ -102,7 +112,7 @@ class IjtihadService:
         ۵. اگر سند صحیح است، فارغ از منفرد بودن، در صورت عدم تعارض با قرآن، حدیث «صحیح» است.
         """
         
-        structured_judge = self.llm.with_structured_output(FinalIjtihadVerdict)
-        final_verdict = structured_judge.invoke(prompt)
-        
+        final_verdict = self.gateway.invoke_structured(
+            prompt=prompt, schema_class=IjtihadVerdictResponse
+        )
         return final_verdict.model_dump()

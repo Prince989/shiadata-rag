@@ -1,18 +1,22 @@
-﻿from schemas.responses import ChatResponse, SourceNode
+﻿import logging
+
+from schemas.responses import ChatResponse, SourceNode
 from pipelines.retrieval_pipeline import RetrievalPipeline
+
+logger = logging.getLogger(__name__)
 
 
 class TheologyService:
-    def __init__(self):
-        # راه‌اندازی موتور RAG (همون کدهای قبلی که به دیتابیس وصل می‌شد)
-        # نکته: موتور رو فقط یک بار در حافظه لود می‌کنیم تا سرعت پاسخگویی بالا بره
-        self.pipeline = RetrievalPipeline(db_directory="./data/chroma_db")
+    def __init__(self, container=None):
+        # موتور RAG فقط یک بار در حافظه لود می‌شود (در lifespan)
+        self.pipeline = RetrievalPipeline(container=container)
 
-    def answer_question(self, question: str) -> ChatResponse:
-        print(f"🧠 [TheologyService] Analyzing question: {question}")
+    def answer_question(
+        self, question: str, collection: str | None = None, top_k: int | None = None
+    ) -> ChatResponse:
+        logger.info("analysing theology question (%d chars)", len(question))
 
-        # فراخوانی تابع ask از پایپ‌لاین شما
-        raw_result = self.pipeline.ask(question)
+        raw_result = self.pipeline.ask(question, collection=collection, top_k=top_k)
 
         # 🚑 [بخش ضدضربه]: اگر پایپ‌لاین شما فقط متنِ جواب رو برگردوند (نه دیکشنری)
         if isinstance(raw_result, str):

@@ -17,17 +17,30 @@ class QuranValidationResponse(BaseModel):
 
 # --- Service ---
 class QuranService:
-    def __init__(self, db_directory: str = "./data/chroma_db"):
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-        self.vectorstore = Chroma(
-            persist_directory=db_directory,
-            embedding_function=self.embeddings,
-            collection_name="quran"
-        )
+    def __init__(self, container=None):
+        from core.config import get_settings
+
+        settings = container.settings if container else get_settings()
+        self.settings = settings
+
+        if container is not None:
+            self.embeddings = container.embeddings
+            self.vectorstore = container.store_for("quran")
+        else:
+            self.embeddings = OpenAIEmbeddings(
+                model=settings.embedding_model, api_key=settings.openai_api_key
+            )
+            self.vectorstore = Chroma(
+                persist_directory=str(settings.chroma_dir),
+                embedding_function=self.embeddings,
+                collection_name="quran",
+            )
+
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-3.5-flash",
+            model=settings.gemini_model,
             temperature=0,
-            max_retries=2
+            max_retries=2,
+            api_key=settings.primary_google_key,
         )
         
         self.prompt = ChatPromptTemplate.from_messages([

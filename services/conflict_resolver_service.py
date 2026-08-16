@@ -1,39 +1,28 @@
-import os
+import logging
 import re
-from pydantic import BaseModel, Field
 from typing import List
-from dotenv import load_dotenv
 
 # ایمپورت‌های اضافی لانگ‌چین رو حذف کردیم
 from services.llm_gateway import LLMGateway
 from services.rijal_service import RijalService
 from services.quran_service import QuranService
 
-load_dotenv()
+from schemas.responses import HadithSingleAnalysis, ConflictResolutionResponse
 
-# --- Schemas ---
-class HadithSingleAnalysis(BaseModel):
-    narrators: List[str] = Field(description="لیست راویان استخراج شده")
-    matn: str = Field(description="متن خالص حدیث")
-    sanad_status: str = Field(description="وضعیت سندی (صحیح، موثق، ضعیف، مجهول)")
+logger = logging.getLogger(__name__)
 
-class ConflictResolutionVerdict(BaseModel):
-    hadith_1_analysis: HadithSingleAnalysis = Field(description="تحلیل سند و متن حدیث اول")
-    hadith_2_analysis: HadithSingleAnalysis = Field(description="تحلیل سند و متن حدیث دوم")
-    is_conflict_detected: bool = Field(description="آیا تعارض غیرقابل جمع وجود دارد؟")
-    sanad_comparison: str = Field(description="مقایسه سندی دو حدیث")
-    quran_tarjih: str = Field(description="سنجش و هم‌سویی با ظاهر آیات قرآن")
-    taqiyyah_analysis: str = Field(description="تحلیل احتمال تقیه (موافق یا مخالف عامه/حاکمیت وقت)")
-    tarjih_rule_applied: str = Field(description="قاعده اصولی بکار رفته (مرجح سندی، مرجح قرآنی، حمل بر تقیه، جمع دلالی)")
-    final_verdict: str = Field(description="حکم نهایی فقهی")
-    detailed_reasoning: str = Field(description="استدلال جامع اصولی و فقهی")
+# Backwards-compatible alias for the manual scripts under scripts/manual/.
+ConflictResolutionVerdict = ConflictResolutionResponse
 
 class ConflictResolverService:
-    def __init__(self):
-        self.rijal_engine = RijalService()
-        self.quran_engine = QuranService()
-        
-        # 👈 ۱. فقط Gateway را نمونه‌سازی می‌کنیم
+    def __init__(self, container=None):
+        # Reuse the container's RijalService instead of building a third one.
+        if container is not None:
+            self.rijal_engine = container.rijal or RijalService(container=container)
+        else:
+            self.rijal_engine = RijalService()
+        self.quran_engine = QuranService(container=container)
+
         self.gateway = LLMGateway()
 
         # 👈 ۲. پرامپت‌ها را به جای شیء لانگ‌چین، به استرینگ‌های پایتونی تبدیل می‌کنیم
@@ -135,11 +124,11 @@ class ConflictResolverService:
         try:
             # 👈 ۴. صدا زدن Gateway با متدی که در `llm_gateway.py` ساختیم!
             response_obj = self.gateway.invoke_structured(
-                prompt=full_prompt, 
-                schema_class=ConflictResolutionVerdict
+                prompt=full_prompt,
+                schema_class=ConflictResolutionResponse,
             )
             return response_obj.model_dump()
-            
+
         except Exception as e:
-            print(f"❌ Conflict Resolver Gateway Error: {e}")
-            raise e
+            logger.error("conflict resolver gateway error: %s", e)
+            raise

@@ -1,27 +1,44 @@
-﻿import os
+﻿import logging
+
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
-from langchain_openai import OpenAIEmbeddings
+from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import OpenAIEmbeddings
+
+from core.config import get_settings
 from schemas.responses import SanadExtractionResponse, LifestyleBatchResponse, AutoTaggingResponse
+
+logger = logging.getLogger(__name__)
 
 
 class HadithService:
-    def __init__(self, db_directory: str = "./data/chroma_db"):
-        # ۱. راه‌اندازی مدل زبانی (با دمای صفر برای دقت بالا در پردازش متون تاریخی)
+    def __init__(self, container=None):
+        settings = container.settings if container else get_settings()
+        self.settings = settings
+
+        # api_key is passed explicitly. This used to read GEMINI_API_KEY, which
+        # is defined nowhere -- it only worked because langchain-google-genai
+        # falls back to GOOGLE_API_KEY and an earlier import happened to have
+        # called load_dotenv() first.
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-3.5-flash",
+            model=settings.gemini_model,
             temperature=0,
-            api_key=os.getenv("GEMINI_API_KEY")
+            api_key=settings.primary_google_key,
         )
 
-        # ۲. اتصال به دیتابیسِ احادیث که اینجست کردیم
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-        self.vectorstore = Chroma(
-            persist_directory=db_directory,
-            embedding_function=self.embeddings,
-            collection_name="hadith"
-        )
+        if container is not None:
+            self.embeddings = container.embeddings
+            self.vectorstore = container.store_for("hadith")
+        else:
+            self.embeddings = OpenAIEmbeddings(
+                model=settings.embedding_model, api_key=settings.openai_api_key
+            )
+            self.vectorstore = Chroma(
+                persist_directory=str(settings.chroma_dir),
+                embedding_function=self.embeddings,
+                collection_name="hadith",
+            )
 
     # ==========================================
     # فیچر ۱: جراحی سند و متن (Sanad Extraction)
@@ -77,10 +94,18 @@ class HadithService:
     # ==========================================
     # متد کمکی: جستجوی برداری (Vector Search)
     # ==========================================
-    def search_similar_hadiths(self, query: str, top_k: int = 3, domain_filter: str = None):
+    def search_similar_hadiths(
+        self, query: str, top_k: int = 3, domain_filter: str = None
+    ) -> list[Document]:
+        """
+        Returns full Documents, not bare strings.
+
+        This previously returned [doc.page_content ...], discarding book_title,
+        chapter and domain. Without that metadata no caller can cite a source,
+        which blocks citation rendering entirely downstream.
+        """
         search_kwargs = {"k": top_k}
         if domain_filter:
             search_kwargs["filter"] = {"domain": domain_filter}
 
-        docs = self.vectorstore.similarity_search(query, **search_kwargs)
-        return [doc.page_content for doc in docs]
+        return self.vectorstore.similarity_search(query, **search_kwargs)

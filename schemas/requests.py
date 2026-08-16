@@ -6,7 +6,7 @@ class ChatRequest(BaseModel):
     # در آینده می‌تونیم پارامترهایی مثل user_id یا session_id رو هم اینجا اضافه کنیم
 
 class SanadValidationRequest(BaseModel):
-    sanad_text: str = Field(..., description="متن عربی سند حدیث (مثال: عن فلان عن فلان...)")
+    sanad_text: list[str] = Field(..., description="متن عربی سند حدیث (مثال: عن فلان عن فلان...)")
 
 class StoryStepRequest(BaseModel):
     topic: str = Field(..., description="موضوع اصلی داستان (مثلاً: جنگ خندق)")

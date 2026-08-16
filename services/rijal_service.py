@@ -1,30 +1,45 @@
-﻿from langchain_chroma import Chroma
+﻿import logging
+import re
+
+from langchain_chroma import Chroma
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
-from schemas.responses import SanadValidationResponse
-from dotenv import load_dotenv
-import os
-import re
 
-load_dotenv()
+from core.config import get_settings
+from schemas.responses import SanadValidationResponse
+
+logger = logging.getLogger(__name__)
+
 
 class RijalService:
-    def __init__(self):
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-        self.vectorstore = Chroma(
-            persist_directory="./data/chroma_db",
-            embedding_function=self.embeddings,
-            collection_name="rijal"
-        )
+    def __init__(self, container=None):
+        settings = container.settings if container else get_settings()
+        self.settings = settings
+        self.container = container
+
+        if container is not None:
+            self.embeddings = container.embeddings
+            self.vectorstore = container.store_for("rijal")
+        else:
+            self.embeddings = OpenAIEmbeddings(
+                model=settings.embedding_model, api_key=settings.openai_api_key
+            )
+            self.vectorstore = Chroma(
+                persist_directory=str(settings.chroma_dir),
+                embedding_function=self.embeddings,
+                collection_name="rijal",
+            )
+
         self.retriever = self.vectorstore.as_retriever(
             search_type="mmr",
             search_kwargs={"k": 20, "fetch_k": 50, "lambda_mult": 0.5}
         )
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-3.5-flash",
+            model=settings.gemini_model,
             temperature=0,
-            max_retries=2
+            max_retries=2,
+            api_key=settings.primary_google_key,
         )
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """شما یک رباتِ استخراج‌گرِ داده هستید و مطلقاً حق استفاده از دانش قبلی خود را ندارید.
