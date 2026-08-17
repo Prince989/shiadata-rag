@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "live: hits real LLM/embedding APIs and the real Chroma DB (deselect with -m 'not live')",
+]

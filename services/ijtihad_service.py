@@ -42,28 +42,18 @@ class IjtihadService:
         self.gateway = LLMGateway()
 
     def _get_rijal_context(self, narrators: list[str]) -> str:
-        all_db_data = self.rijal_engine.vectorstore.get(include=["documents", "metadatas"])
+        index = getattr(self.rijal_engine.container, "rijal_index", None) if getattr(
+            self.rijal_engine, "container", None
+        ) else None
+
         context_text = ""
         for narrator in narrators:
             narrator_clean = narrator.strip()
-            n_fa = narrator_clean.replace("ي", "ی").replace("ك", "ک").replace("أ", "ا")
-            n_ar = narrator_clean.replace("ی", "ي").replace("ک", "ك").replace("ا", "أ")
-            
-            exact_matches = []
-            from langchain_core.documents import Document
-            for text, meta in zip(all_db_data["documents"], all_db_data["metadatas"]):
-                if narrator_clean in text or n_fa in text or n_ar in text:
-                    exact_matches.append(Document(page_content=text, metadata=meta))
-            
+
+            exact_matches = index.lookup(narrator_clean, limit=3) if index else []
+
             if exact_matches:
-                def score_doc(doc):
-                    text = doc.page_content
-                    score = 100 if re.search(r'(^|\n|\-)\s*' + re.escape(narrator_clean), text) else 0
-                    if any(word in text for word in ["=", "ضعيف", "ثقة", "صحيح", "مجهول"]): score += 50
-                    return score - (len(text) / 1000)
-                
-                exact_matches.sort(key=score_doc, reverse=True)
-                for doc in exact_matches[:3]:
+                for doc in exact_matches:
                     context_text += f"--- {doc.metadata.get('book_title')} ---\n{doc.page_content[:400]}\n"
             else:
                 docs = self.rijal_engine.retriever.invoke(narrator_clean)

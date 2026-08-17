@@ -69,21 +69,20 @@ class ConflictResolverService:
         return [text[:50]]
 
     def _get_rijal_context_python(self, narrators: List[str]) -> str:
-        all_db_data = self.rijal_engine.vectorstore.get(include=["documents", "metadatas"])
+        # This used to dump the full rijal collection with vectorstore.get(...)
+        # -- and resolve_conflict calls this method TWICE per request, so it
+        # was the actual source of most of the endpoint's 20-60s latency.
+        index = getattr(self.rijal_engine, "container", None)
+        index = index.rijal_index if index else None
+
         context_text = ""
         for narrator in narrators:
             narrator_clean = narrator.strip()
-            n_fa = narrator_clean.replace("ي", "ی").replace("ك", "ک").replace("أ", "ا")
-            n_ar = narrator_clean.replace("ی", "ي").replace("ک", "ك").replace("ا", "أ")
-            
-            from langchain_core.documents import Document
-            exact_matches = []
-            for doc_text, meta in zip(all_db_data["documents"], all_db_data["metadatas"]):
-                if narrator_clean in doc_text or n_fa in doc_text or n_ar in doc_text:
-                    exact_matches.append(Document(page_content=doc_text, metadata=meta))
-            
+
+            exact_matches = index.lookup(narrator_clean, limit=2) if index else []
+
             if exact_matches:
-                for doc in exact_matches[:2]:
+                for doc in exact_matches:
                     context_text += f"--- {doc.metadata.get('book_title', 'رجال')} ---\n{doc.page_content[:300]}\n"
             else:
                 docs = self.rijal_engine.retriever.invoke(narrator_clean)
@@ -96,18 +95,18 @@ class ConflictResolverService:
         return "\n".join([f"--- آیه ---\n{doc.page_content}" for doc in docs])
 
     def resolve_conflict(self, hadith_text_1: str, hadith_text_2: str) -> dict:
-        print("\n🔍 [Python DB Search] Fetching contexts for Hadith 1...")
+        logger.info("fetching rijal/quran context for hadith 1")
         narrators_1 = self._extract_narrators_python(hadith_text_1)
         rijal_1_ctx = self._get_rijal_context_python(narrators_1)
         quran_1_ctx = self._get_quran_context_python(hadith_text_1)
 
-        print("🔍 [Python DB Search] Fetching contexts for Hadith 2...")
+        logger.info("fetching rijal/quran context for hadith 2")
         narrators_2 = self._extract_narrators_python(hadith_text_2)
         rijal_2_ctx = self._get_rijal_context_python(narrators_2)
         quran_2_ctx = self._get_quran_context_python(hadith_text_2)
 
-        print("\n🚀 [SINGLE LLM CALL] Executing Consolidated Conflict Resolution via LLMGateway...")
-        
+        logger.info("executing consolidated conflict resolution via LLMGateway")
+
         # 👈 ۳. مقادیر را در قالب متنی جاگذاری می‌کنیم
         final_user_prompt = self.user_prompt_template.format(
             hadith_1_raw=hadith_text_1,

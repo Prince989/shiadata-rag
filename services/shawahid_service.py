@@ -1,13 +1,12 @@
-import os
+import logging
 from pydantic import BaseModel, Field
 from typing import List
 from langchain_chroma import Chroma
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
-from dotenv import load_dotenv
 
-load_dotenv()
+logger = logging.getLogger(__name__)
 
 # --- Schemas ---
 class CorroborationResponse(BaseModel):
@@ -57,19 +56,19 @@ class ShawahidService:
         ])
 
     def find_shawahid(self, raw_hadith: str) -> dict:
-        print(f"\n🔎 [ShawahidService] Hunting for corroborating Hadiths (Shawahid)...")
-        
-        # جستجوی ۶ حدیث شبیه‌تر (برای اینکه اگر اولی خودش بود، ۵ تای دیگه رو بررسی کنه)
+        logger.info("hunting for corroborating hadiths (shawahid)")
+
+        # k=6: if the source hadith itself is the top hit, there are still 5 to check.
         docs = self.vectorstore.similarity_search(raw_hadith, k=6)
-        
+
         search_results = ""
         for i, doc in enumerate(docs):
             search_results += f"--- نتیجه یافت شده {i+1} ---\n{doc.page_content}\n\n"
-            
-        print("   ✅ Found potential matches in Hadith DB. Sending to LLM for Shawahid analysis...")
-        
+
+        logger.debug("found %d candidates, invoking LLM for shawahid analysis", len(docs))
+
         chain = self.prompt | self.llm.with_structured_output(CorroborationResponse)
-        
+
         try:
             response_obj = chain.invoke({
                 "main_hadith": raw_hadith,
@@ -77,5 +76,5 @@ class ShawahidService:
             })
             return response_obj.model_dump()
         except Exception as e:
-            print(f"❌ Shawahid LLM Error: {e}")
-            raise e
+            logger.error("Shawahid LLM error: %s", e)
+            raise

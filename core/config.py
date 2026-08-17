@@ -13,25 +13,40 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from dotenv import dotenv_values
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from core.paths import CHROMA_DIR, PROJECT_ROOT
 
+ENV_FILE = PROJECT_ROOT / ".env"
+
 _GOOGLE_KEY_PATTERN = re.compile(r"^GOOGLE_API_KEY(\d*)$")
 
 
-def _collect_google_keys() -> list[str]:
+def _collect_google_keys(env_file: Path) -> list[str]:
     """
     Gather GOOGLE_API_KEY, GOOGLE_API_KEY1..N into an ordered, de-duplicated list.
+
+    Reads the .env file *and* the process environment, because pydantic-settings
+    parses the .env itself without exporting anything into os.environ -- so
+    scanning os.environ alone silently finds nothing.
 
     De-duplication is deliberate: the pool is currently populated with the same
     key repeated under several names, which makes round-robin pure theatre while
     looking like real capacity. Collapsing duplicates makes the true pool size
     visible in the startup log.
     """
+    sources: dict[str, str] = {}
+    if env_file.exists():
+        sources.update(
+            {k: v for k, v in dotenv_values(env_file, encoding="utf-8-sig").items() if v}
+        )
+    # Real environment variables take precedence over the .env file.
+    sources.update(os.environ)
+
     found: dict[int, str] = {}
-    for name, value in os.environ.items():
+    for name, value in sources.items():
         match = _GOOGLE_KEY_PATTERN.match(name)
         if not match or not value or not value.strip():
             continue
@@ -50,7 +65,7 @@ def _collect_google_keys() -> list[str]:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=PROJECT_ROOT / ".env",
+        env_file=ENV_FILE,
         env_file_encoding="utf-8-sig",  # the .env carries a BOM
         extra="ignore",
         case_sensitive=False,
@@ -97,7 +112,7 @@ class Settings(BaseSettings):
     def _load_google_keys(self) -> "Settings":
         if not self.google_api_keys:
             # object.__setattr__ avoids re-triggering validation
-            object.__setattr__(self, "google_api_keys", _collect_google_keys())
+            object.__setattr__(self, "google_api_keys", _collect_google_keys(ENV_FILE))
         return self
 
     @field_validator("chroma_dir")

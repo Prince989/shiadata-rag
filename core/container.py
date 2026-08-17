@@ -83,8 +83,25 @@ def build_container(settings: Settings) -> ServiceContainer:
         )
 
     _warn_on_default_collection(container)
+    container.rijal_index = _build_rijal_index(container)
     _build_services(container)
     return container
+
+
+def _build_rijal_index(container: ServiceContainer):
+    from services.rijal_index import RijalIndex
+
+    store = container.store_for("rijal")
+    if store is None:
+        return None
+    try:
+        index = RijalIndex.build(store)
+        logger.info("rijal index built: %d entries", len(index))
+        return index
+    except Exception as exc:
+        container.degraded["rijal_index"] = f"{type(exc).__name__}: {exc}"
+        logger.error("failed to build rijal index: %s", exc)
+        return None
 
 
 def _warn_on_default_collection(container: ServiceContainer) -> None:

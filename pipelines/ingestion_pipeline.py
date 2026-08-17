@@ -11,13 +11,20 @@ load_dotenv()
 
 
 class IngestionPipeline:
-    def __init__(self, db_directory: str = "./data/chroma_db", collection_name: str = "theology"):
-        self.db_directory = db_directory
-        self.collection_name = collection_name
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    def __init__(self, db_directory: str | None = None, collection_name: str = "theology"):
+        from core.config import get_settings
+        from core.paths import CATALOG_PATH
 
-        # 🚀 بارگذاری هوشمند متادیتا از فایل کانفیگ
-        self.catalog_path = os.path.join("core", "catalog.json")
+        settings = get_settings()
+        # Absolute by default. A relative Chroma path does not error when the
+        # working directory is wrong -- it silently creates a new empty DB.
+        self.db_directory = str(db_directory or settings.chroma_dir)
+        self.collection_name = collection_name
+        self.embeddings = OpenAIEmbeddings(
+            model=settings.embedding_model, api_key=settings.openai_api_key
+        )
+
+        self.catalog_path = str(CATALOG_PATH)
         self.catalog = self._load_catalog()
 
     def _load_catalog(self):

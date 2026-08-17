@@ -1,82 +1,109 @@
-from pipelines.retrieval_pipeline import RetrievalPipeline
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+"""
+SHIA-DATA AI Engine -- internal retrieval microservice.
+
+This service is NOT internet-facing. It sits behind the NestJS backend, which
+is its only client. Consequently it binds to localhost by default, guards every
+data route with a shared secret, and carries no CORS middleware at all (CORS is
+a browser mechanism and does not apply to a server-side HTTP client).
+"""
+
+import logging
+from contextlib import asynccontextmanager
+
+import anyio.to_thread
 import uvicorn
+from fastapi import Depends, FastAPI
 
-from schemas.responses import ChatResponse
-from api.routes import theology, rijal, hadith, ijtihad, story
+from api.dependencies import get_container, require_api_key
+from api.routes import chat, hadith, ijtihad, rijal, search, story, theology
+from core.config import get_settings
+from core.container import ServiceContainer, build_container
+from schemas.responses import HealthResponse
 
-# راه‌اندازی اپلیکیشن FastAPI با مستندات خودکار
+logging.basicConfig(
+    level=get_settings().log_level,
+    format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
+)
+logger = logging.getLogger("shiadata")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+
+    # Bound the threadpool. Plain `def` handlers run here, and each heavy
+    # rijal request holds a large working set -- 40 simultaneous ones (anyio's
+    # default) would be an out-of-memory event.
+    anyio.to_thread.current_default_thread_limiter().total_tokens = (
+        settings.thread_pool_size
+    )
+
+    logger.info("building service container from %s", settings.chroma_dir)
+    container = await anyio.to_thread.run_sync(build_container, settings)
+    app.state.container = container
+
+    counts = container.collection_counts()
+    logger.info("collections: %s", counts)
+    if container.degraded:
+        logger.warning("degraded subsystems: %s", list(container.degraded))
+
+    yield
+
+    logger.info("shutting down")
+    app.state.container = None
+
+
+settings = get_settings()
+
 app = FastAPI(
     title="SHIA-DATA AI Engine",
-    description="Enterprise-Grade Islamic AI API for .NET CMS",
-    version="1.0.0",
-    docs_url="/docs",     # آدرس پنل Swagger
-    redoc_url="/redoc"    # آدرس پنل ReDoc
+    description="Internal retrieval and analysis engine. Consumed by the NestJS backend.",
+    version="2.0.0",
+    lifespan=lifespan,
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url="/redoc" if settings.docs_enabled else None,
+    # Kept enabled in every environment (behind the API key) because the
+    # NestJS side generates its types from this document.
+    openapi_url="/openapi.json",
 )
 
-# تنظیمات CORS (برای اینکه پروژه‌ی دات‌نت یا Next.js بتونه بدون خطای امنیتی بهش وصل بشه)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # در پروداکشن اینجا آدرس دامنه guided-one رو می‌ذاریم
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-# یک Route ساده برای تست زنده بودن سرور (Health Check)
-@app.get("/api/v1/health", tags=["System"])
-def health_check():
-    return {
-        "status": "online",
-        "message": "🧠 SHIA-DATA AI Engine is up and running!"
-    }
+@app.get("/api/v1/health", tags=["System"], response_model=HealthResponse)
+def health_check(container: ServiceContainer = Depends(get_container)) -> HealthResponse:
+    """
+    Unauthenticated liveness + inventory.
 
-# ثبت کردن API کلام و مهدویت در سرور اصلی
-app.include_router(
-    theology.router,
-    prefix="/api/v1/theology",
-    tags=["Theology & Mahdawiyyat"]
-)
+    Deliberately open so orchestrator probes work, and deliberately cheap so it
+    still answers while a heavy request is in flight.
+    """
+    index = container.rijal_index
+    return HealthResponse(
+        status="degraded" if container.degraded else "online",
+        collections=container.collection_counts(),
+        rijal_index_size=len(index) if index is not None else None,
+        degraded=container.degraded,
+    )
 
-app.include_router(rijal.router, prefix="/api/v1/rijal", tags=["Ilm al-Rijal (Hadith Validation)"])
-app.include_router(hadith.router)
-app.include_router(ijtihad.router, tags=["Ijtihad Engine"])
-app.include_router(story.router, tags=["Story Engine"])
 
-@app.post("/api/v1/chat", response_model=ChatResponse, tags=["Chat"])
-def chat_with_bot():
-    print("==================================================")
-    print("🧠 SHIA-DATA AI ENGINE IS ONLINE (Type 'exit' to quit)")
-    print("==================================================\n")
+# Every data route requires the shared secret. /health above does not.
+guarded = [Depends(require_api_key)]
 
-    # روشن کردن موتورِ جستجو
-    pipeline = RetrievalPipeline()
-
-    while True:
-        question = input("\n👤 You: ")
-        if question.lower() in ['exit', 'quit']:
-            print("👋 Goodbye!")
-            break
-
-        if not question.strip():
-            continue
-
-        print("\n🤖 AI is thinking...\n")
-        answer = pipeline.ask(question)
-        print("--------------------------------------------------")
-        print(f"💡 AI Answer:\n{answer}")
-        print("--------------------------------------------------")
+app.include_router(search.router, dependencies=guarded)
+app.include_router(chat.router, dependencies=guarded)
+app.include_router(theology.router, dependencies=guarded)
+app.include_router(rijal.router, dependencies=guarded)
+app.include_router(hadith.router, dependencies=guarded)
+app.include_router(ijtihad.router, dependencies=guarded)
+# Storyteller is intentionally left untouched and unguarded-by-plan; it stays
+# mounted but non-functional until the NestJS storyteller replaces it.
+app.include_router(story.router, dependencies=guarded)
 
 
 if __name__ == "__main__":
-    print("==================================================")
-    print("🚀 Starting SHIA-DATA API Server...")
-    print("🌐 Swagger Docs available at: http://localhost:8000/docs")
-    print("==================================================")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-
-'''
-if __name__ == "__main__":
-    chat_with_bot()
-'''
+    logger.info("starting SHIA-DATA API on %s:%s", settings.host, settings.port)
+    uvicorn.run(
+        "main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.reload,
+    )

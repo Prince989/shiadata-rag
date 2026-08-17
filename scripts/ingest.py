@@ -1,5 +1,12 @@
 ﻿import os
+import sys
 import argparse
+from pathlib import Path
+
+# Allow `python scripts/ingest.py` from anywhere.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from core.paths import CHROMA_DIR, RAW_EPUBS_DIR
 from pipelines.ingestion_pipeline import IngestionPipeline
 
 
@@ -16,13 +23,16 @@ def batch_ingest():
     parser = argparse.ArgumentParser(description="Batch Ingest EPUB and TXT books into ChromaDB")
     parser.add_argument("--force", type=str, help="Force re-ingest a specific book filename")
     parser.add_argument("--force-all", action="store_true", help="Force wipe and re-ingest ALL books")
-    parser.add_argument("--collection", type=str, default="hadith",
-                        help="Target collection name (e.g., 'theology', 'rijal', 'hadith')")
+    # Default is 'theology' to match IngestionPipeline's own default. It used
+    # to be 'hadith', which silently contradicted the pipeline and meant the
+    # two theology epubs in raw_epubs/ root were unreachable by this CLI.
+    parser.add_argument("--collection", type=str, default="theology",
+                        help="Target collection: theology | hadith | rijal | quran")
 
     args = parser.parse_args()
 
-    db_path = os.path.join("data", "chroma_db")
-    epubs_dir = os.path.join("data", "raw_epubs", args.collection)
+    db_path = str(CHROMA_DIR)
+    epubs_dir = str(RAW_EPUBS_DIR / args.collection)
 
     if not os.path.exists(epubs_dir):
         print(f"❌ Error: Directory not found at {epubs_dir}")

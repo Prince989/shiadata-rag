@@ -64,48 +64,33 @@ class RijalService:
             ("human", "سند برای بررسی: {sanad}")
         ])
 
-    # 🚀 اصلاح بزرگ: دریافت لیست راویان به جای استرینگ خام
     def validate_sanad(self, narrators: list[str]) -> dict:
-        print(f"\n🔍 [RijalService] Analyzing Narrators List: {narrators}")
+        logger.info("analyzing narrators: %s", narrators)
 
         all_docs = []
-        print("   📥 Fetching entire Vector DB for exact memory match...")
-        all_db_data = self.vectorstore.get(include=["documents", "metadatas"])
-        
+        index = self.container.rijal_index if self.container else None
+
         for narrator in narrators:
             narrator_clean = narrator.strip()
-            
-            n_fa = narrator_clean.replace("ي", "ی").replace("ك", "ک").replace("أ", "ا")
-            n_ar = narrator_clean.replace("ی", "ي").replace("ک", "ك").replace("ا", "أ")
-            
-            print(f"   🔍 Memory Hunting for: '{narrator_clean}'")
-            
-            exact_matches = []
-            from langchain_core.documents import Document
-            
-            for text, meta in zip(all_db_data["documents"], all_db_data["metadatas"]):
-                if narrator_clean in text or n_fa in text or n_ar in text:
-                    exact_matches.append(Document(page_content=text, metadata=meta))
-            
-            if exact_matches:
-                print(f"      ✅ BINGO! Found {len(exact_matches)} exact matches.")
-                
-                def score_doc(doc):
-                    text = doc.page_content
-                    score = 0
-                    if re.search(r'(^|\n|\-)\s*' + re.escape(narrator_clean), text):
-                        score += 100
-                    if re.search(r'(^|\n|\-)\s*' + re.escape(n_ar), text):
-                        score += 100
-                    if any(word in text for word in ["=", "ضعيف", "ثقة", "ثقه", "صحيح", "مجهول"]):
-                        score += 50
-                    score -= len(text) / 1000 
-                    return score
-                
-                exact_matches.sort(key=score_doc, reverse=True)
-                all_docs.extend(exact_matches[:5])
+
+            if index is not None:
+                # Normalized substring match against an index built once at
+                # startup, instead of dumping and scanning the full 12,941-doc
+                # collection on every call.
+                exact_matches = index.lookup(narrator_clean, limit=5)
             else:
-                print(f"      ⚠️ No exact match anywhere. Falling back to Vector Search...")
+                exact_matches = []
+
+            if exact_matches:
+                logger.info(
+                    "'%s': %d exact matches", narrator_clean, len(exact_matches)
+                )
+                all_docs.extend(exact_matches)
+            else:
+                logger.info(
+                    "'%s': no exact match, falling back to vector search",
+                    narrator_clean,
+                )
                 all_docs.extend(self.retriever.invoke(narrator_clean))
 
         unique_pages = set()
@@ -122,14 +107,13 @@ class RijalService:
         if not context_text:
             context_text = "هیچ متنی در دیتابیس یافت نشد."
 
-        print("🤖 Step 3: Synthesizing AI Verdict...")
+        logger.info("synthesizing AI verdict")
         chain = self.prompt | self.llm.with_structured_output(SanadValidationResponse)
 
         try:
-            # ارسال نام راویان به صورت یک رشته با کاما برای قاضی نهایی
             sanad_string = "، ".join(narrators)
             response_obj = chain.invoke({"context": context_text, "sanad": sanad_string})
             return response_obj.model_dump()
         except Exception as e:
-            print(f"❌ LLM Error: {e}")
-            raise e
+            logger.error("LLM error in validate_sanad: %s", e)
+            raise

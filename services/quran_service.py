@@ -1,13 +1,12 @@
-import os
+import logging
 from pydantic import BaseModel, Field
 from typing import List
 from langchain_chroma import Chroma
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
-from dotenv import load_dotenv
 
-load_dotenv()
+logger = logging.getLogger(__name__)
 
 # --- Schemas ---
 class QuranValidationResponse(BaseModel):
@@ -56,19 +55,18 @@ class QuranService:
         ])
 
     def validate_matn_with_quran(self, hadith_matn: str) -> dict:
-        print(f"\n🕋 [QuranService] Searching Quran for matching concepts...")
-        
-        # واکشی ۵ آیه مرتبط از دیتابیس
+        logger.info("searching Quran for matching concepts")
+
         docs = self.vectorstore.similarity_search(hadith_matn, k=5)
-        
+
         quran_context = ""
         for i, doc in enumerate(docs):
             quran_context += f"--- نتیجه {i+1} ---\n{doc.page_content}\n\n"
-            
-        print("   ✅ Found relevant Ayahs. Sending to LLM for precise Tafsir analysis...")
-        
+
+        logger.debug("found %d relevant ayahs, invoking LLM", len(docs))
+
         chain = self.prompt | self.llm.with_structured_output(QuranValidationResponse)
-        
+
         try:
             response_obj = chain.invoke({
                 "matn": hadith_matn,
@@ -76,5 +74,5 @@ class QuranService:
             })
             return response_obj.model_dump()
         except Exception as e:
-            print(f"❌ Quran LLM Error: {e}")
-            raise e
+            logger.error("Quran LLM error: %s", e)
+            raise

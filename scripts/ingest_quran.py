@@ -1,13 +1,21 @@
 import json
 import os
+import sys
+from pathlib import Path
+
+# Allow `python scripts/ingest_quran.py` from anywhere.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 from dotenv import load_dotenv
 
+from core.paths import CHROMA_DIR, QURAN_JSON_PATH
+
 load_dotenv()
 
-def ingest_quran(json_path: str = "./data/quran.json", db_directory: str = "./data/chroma_db"):
+def ingest_quran(json_path: str = str(QURAN_JSON_PATH), db_directory: str = str(CHROMA_DIR)):
     print("\n" + "="*50)
     print("📖 STARTING QURAN INGESTION ENGINE 📖")
     print("="*50)

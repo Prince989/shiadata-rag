@@ -31,6 +31,8 @@
     "waqat-siffin": { "domain": "history" },
 
     "kamal-al-din": { "domain": "theology_mahdawiyyat" },
+    "kitab al-ghayba": { "domain": "theology_mahdawiyyat", "has_sanad": false, "language": "en" },
+    "the life of imam al-mahdi": { "domain": "theology_mahdawiyyat", "has_sanad": false, "language": "en" },
     "al-ehtejaj": { "domain": "theology_debates", "has_sanad": false },
 
     "tafsir-al-qomi": { "domain": "exegesis" },
