@@ -51,6 +51,25 @@ Create a .env file in the root directory and add your OpenAI API key:
 OPENAI_API_KEY=sk-your-openai-api-key-here
 ```
 
+## 📥 Download Pre-built Vector Database (Recommended)
+
+To save time and OpenAI API costs (for embeddings), you do not need to ingest all books from scratch. We have provided a fully ingested, structured Vector Database containing major Shia texts (Rijal, Fiqh, History, Theology, etc.).
+
+**How to add the database to your project:**
+
+1. Go to the [ShiaData Database Releases Page](https://github.com/Prince989/shiadata-rag/releases).
+2. Download the compressed database file (e.g., `.zip` or `.tar.gz`) from the **Assets** section.
+3. Extract the downloaded file.
+4. Place the extracted `chroma_db` folder directly into the `data/` directory of your project.
+
+Your structure should look exactly like this:
+```text
+SHIA-DATA-AI/
+├── data/
+│   ├── raw_epubs/
+│   └── chroma_db/      <-- Place the extracted database folder here!
+```
+
 ### 📚 Database Management (Data Ingestion)
 
 Place your raw Islamic texts (.epub format) inside the data/raw_epubs/ directory. Use the robust ingestion CLI to manage your vector database:
