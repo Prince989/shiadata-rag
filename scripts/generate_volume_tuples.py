@@ -57,10 +57,10 @@ def generate_volume_tuples(collection_name, book_name, base_url, total_volumes):
 # ==========================================
 if __name__ == "__main__":
     # تنظیمات ورودی
-    COLLECTION_NAME = "bihar-al-anvar"
-    BOOK_NAME = "bihar-al-anvar"
-    BASE_URL = "https://lib.eshia.ir/11008"
-    TOTAL_VOLUMES = 104
+    COLLECTION_NAME = "tafsir"
+    BOOK_NAME = "tebyan"
+    BASE_URL = "https://lib.eshia.ir/86469"
+    TOTAL_VOLUMES = 27
 
     # فراخوانی تابع
     final_data = generate_volume_tuples(COLLECTION_NAME, BOOK_NAME, BASE_URL, TOTAL_VOLUMES)
